@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grand London Rides – Admin Panel</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --navy: #0D1526; --navy2: #131F35; --card: #1A2640;
+  --border: #243050; --amber: #F2A33C; --green: #22C55E;
+  --red: #EF4444; --blue: #3B82F6; --cream: #E2E8F0; --slate: #64748B;
+}
+body { font-family: 'Inter', sans-serif; background: var(--navy); color: var(--cream); min-height: 100vh; }
+
+/* LOGIN */
+#loginScreen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.login-card { background: var(--navy2); border: 1px solid var(--border); border-radius: 16px; padding: 40px; width: 100%; max-width: 380px; }
+.login-card h2 { font-family: 'Space Grotesk', sans-serif; font-size: 22px; color: #FAF8F4; margin-bottom: 6px; }
+.login-card p { font-size: 13px; color: var(--slate); margin-bottom: 24px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { font-size: 11px; color: var(--slate); display: block; margin-bottom: 6px; letter-spacing: 0.08em; }
+.form-group input { width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; color: #FAF8F4; font-size: 14px; outline: none; }
+.form-group input:focus { border-color: var(--amber); }
+.login-btn { width: 100%; background: var(--amber); color: var(--navy); border: none; border-radius: 8px; padding: 12px; font-size: 14px; font-weight: 700; cursor: pointer; }
+.login-err { color: var(--red); font-size: 12px; margin-top: 8px; }
+
+/* NAV */
+.nav { background: var(--navy2); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 100; }
+.nav-brand { font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 600; color: #FAF8F4; display: flex; align-items: center; gap: 8px; }
+.nav-tabs { display: flex; gap: 4px; }
+.nav-tab { padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--slate); border: none; background: none; }
+.nav-tab.active { background: var(--card); color: #FAF8F4; }
+.logout-btn { font-size: 12px; color: var(--slate); cursor: pointer; border: 1px solid var(--border); background: none; padding: 6px 12px; border-radius: 6px; }
+
+/* MAIN */
+.main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+
+/* STATS */
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: var(--navy2); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.stat-value { font-family: 'Space Grotesk', sans-serif; font-size: 28px; font-weight: 700; color: #FAF8F4; margin-bottom: 4px; }
+.stat-value.amber { color: var(--amber); }
+.stat-value.green { color: var(--green); }
+.stat-value.blue { color: var(--blue); }
+.stat-label { font-size: 12px; color: var(--slate); }
+
+/* TABLE */
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.section-title { font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 600; color: #FAF8F4; }
+.filter-row { display: flex; gap: 8px; }
+.filter-btn { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--slate); }
+.filter-btn.active { background: var(--amber); color: var(--navy); border-color: var(--amber); }
+
+.table-wrap { background: var(--navy2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+table { width: 100%; border-collapse: collapse; }
+th { padding: 12px 16px; text-align: left; font-size: 10px; font-weight: 600; color: var(--slate); letter-spacing: 0.1em; border-bottom: 1px solid var(--border); background: var(--card); }
+td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,0.02); }
+
+.status-badge { font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 20px; letter-spacing: 0.06em; }
+.s-new { background: rgba(242,163,60,0.15); color: var(--amber); border: 1px solid rgba(242,163,60,0.3); }
+.s-accepted { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+.s-completed { background: rgba(100,116,139,0.2); color: var(--slate); border: 1px solid rgba(100,116,139,0.3); }
+.s-rejected { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+
+.action-btn { font-size: 11px; padding: 4px 10px; border-radius: 6px; cursor: pointer; border: none; font-weight: 500; margin-right: 4px; }
+.btn-accept { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+.btn-reject { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+.btn-complete { background: rgba(59,130,246,0.15); color: var(--blue); border: 1px solid rgba(59,130,246,0.3); }
+
+.empty { text-align: center; padding: 40px; color: var(--slate); font-size: 14px; }
+
+/* TABS CONTENT */
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+@media (max-width: 768px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .nav-tabs { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div style="text-align:center;margin-bottom:24px;">
+      <span style="font-size:32px;">🚗</span>
+      <h2 style="margin-top:8px;">Admin Panel</h2>
+      <p>Grand London Rides</p>
+    </div>
+    <div class="form-group">
+      <label>USERNAME</label>
+      <input type="text" id="adminUser" placeholder="Enter username"/>
+    </div>
+    <div class="form-group">
+      <label>PASSWORD</label>
+      <input type="password" id="adminPass" placeholder="Enter password" onkeydown="if(event.key==='Enter')login()"/>
+    </div>
+    <button class="login-btn" onclick="login()">Sign In →</button>
+    <p class="login-err" id="loginErr"></p>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" style="display:none;">
+  <nav class="nav">
+    <div class="nav-brand">🚗 Grand London Rides <span style="font-size:11px;color:var(--slate);font-weight:400;">Admin</span></div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="showTab('bookings')">📋 Bookings</button>
+      <button class="nav-tab" onclick="showTab('earnings')">💰 Earnings</button>
+      <button class="nav-tab" onclick="showTab('drivers')">🚗 Drivers</button>
+    </div>
+    <button class="logout-btn" onclick="logout()">Sign out</button>
+  </nav>
+
+  <div class="main">
+    <!-- STATS -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value amber" id="statTotal">£0</div>
+        <div class="stat-label">Total earnings</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statBookings">0</div>
+        <div class="stat-label">Total bookings</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value green" id="statNew">0</div>
+        <div class="stat-label">New requests</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value blue" id="statCompleted">0</div>
+        <div class="stat-label">Completed rides</div>
+      </div>
+    </div>
+
+    <!-- BOOKINGS TAB -->
+    <div id="tab-bookings" class="tab-content active">
+      <div class="section-header">
+        <span class="section-title">All Bookings</span>
+        <div class="filter-row">
+          <button class="filter-btn active" onclick="filterBookings('all', this)">All</button>
+          <button class="filter-btn" onclick="filterBookings('new', this)">New</button>
+          <button class="filter-btn" onclick="filterBookings('accepted', this)">Accepted</button>
+          <button class="filter-btn" onclick="filterBookings('completed', this)">Completed</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>CUSTOMER</th>
+              <th>PICKUP</th>
+              <th>DROP-OFF</th>
+              <th>WHEN</th>
+              <th>FARE</th>
+              <th>STATUS</th>
+              <th>ACTIONS</th>
+            </tr>
+          </thead>
+          <tbody id="bookingsTable">
+            <tr><td colspan="7" class="empty">Loading bookings...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- EARNINGS TAB -->
+    <div id="tab-earnings" class="tab-content">
+      <div class="section-header">
+        <span class="section-title">Earnings Overview</span>
+      </div>
+      <div class="stats-grid" style="margin-bottom:24px;">
+        <div class="stat-card">
+          <div class="stat-value amber" id="earnToday">£0</div>
+          <div class="stat-label">Today</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value amber" id="earnWeek">£0</div>
+          <div class="stat-label">This week</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value amber" id="earnMonth">£0</div>
+          <div class="stat-label">This month</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value amber" id="earnTotal">£0</div>
+          <div class="stat-label">All time</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>DATE</th>
+              <th>CUSTOMER</th>
+              <th>ROUTE</th>
+              <th>FARE</th>
+              <th>STATUS</th>
+            </tr>
+          </thead>
+          <tbody id="earningsTable">
+            <tr><td colspan="5" class="empty">Loading earnings...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- DRIVERS TAB -->
+    <div id="tab-drivers" class="tab-content">
+      <div class="section-header">
+        <span class="section-title">Fleet Management</span>
+        <button class="filter-btn active" onclick="addDriver()">+ Add Driver</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>DRIVER</th>
+              <th>VEHICLE</th>
+              <th>PHONE</th>
+              <th>STATUS</th>
+              <th>RIDES TODAY</th>
+              <th>EARNINGS TODAY</th>
+            </tr>
+          </thead>
+          <tbody id="driversTable">
+            <tr>
+              <td><strong>Akbar K.</strong></td>
+              <td>🚐 Mercedes Vito · 9-seater</td>
+              <td>+44 7438 310232</td>
+              <td><span class="status-badge s-accepted">Available</span></td>
+              <td>4</td>
+              <td style="color:var(--amber);font-weight:600;">£124.00</td>
+            </tr>
+            <tr>
+              <td><strong>Mohammed A.</strong></td>
+              <td>🚗 Toyota Prius · Saloon</td>
+              <td>+44 7700 900111</td>
+              <td><span class="status-badge s-new">On Ride</span></td>
+              <td>6</td>
+              <td style="color:var(--amber);font-weight:600;">£98.50</td>
+            </tr>
+            <tr>
+              <td><strong>Tariq H.</strong></td>
+              <td>🚗 Skoda Octavia · Saloon</td>
+              <td>+44 7700 900222</td>
+              <td><span class="status-badge s-accepted">Available</span></td>
+              <td>3</td>
+              <td style="color:var(--amber);font-weight:600;">£61.50</td>
+            </tr>
+            <tr>
+              <td><strong>Imran B.</strong></td>
+              <td>🚐 Ford Galaxy · 7-seater</td>
+              <td>+44 7700 900333</td>
+              <td><span class="status-badge s-completed">Offline</span></td>
+              <td>0</td>
+              <td style="color:var(--slate);">£0.00</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://wpvjamzkpxlduqsceodh.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndwdmphbXprcHhsZHVxc2Nlb2RoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQwNjUyNjQsImV4cCI6MjA5OTY0MTI2NH0.2hr7uehwgjBkLUjE_RPA81hf7w6IWTKIrBCsMAUxSgE';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Simple admin login
+const ADMIN_USER = 'admin';
+const ADMIN_PASS = 'GLR2024!';
+
+let allBookings = [];
+let currentFilter = 'all';
+
+function login() {
+  const user = document.getElementById('adminUser').value;
+  const pass = document.getElementById('adminPass').value;
+  if (user === ADMIN_USER && pass === ADMIN_PASS) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    loadBookings();
+    setInterval(loadBookings, 10000);
+  } else {
+    document.getElementById('loginErr').textContent = 'Incorrect username or password';
+  }
+}
+
+function logout() {
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('dashboard').style.display = 'none';
+}
+
+function showTab(tab) {
+  document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.nav-tab').forEach(function(t) { t.classList.remove('active'); });
+  document.getElementById('tab-' + tab).classList.add('active');
+  event.target.classList.add('active');
+}
+
+async function loadBookings() {
+  const { data, error } = await sb.from('Bookings').select('*').order('created_at', { ascending: false });
+  if (error || !data) return;
+  allBookings = data;
+  updateStats(data);
+  renderBookings(data);
+  renderEarnings(data);
+}
+
+function updateStats(data) {
+  document.getElementById('statBookings').textContent = data.length;
+  document.getElementById('statNew').textContent = data.filter(function(b) { return b.status === 'new'; }).length;
+  document.getElementById('statCompleted').textContent = data.filter(function(b) { return b.status === 'completed'; }).length;
+
+  let total = 0;
+  data.forEach(function(b) {
+    if (b.fare && b.fare !== 'N/A') {
+      const match = b.fare.match(/£([\d.]+)/);
+      if (match) total += parseFloat(match[1]);
+    }
+  });
+  document.getElementById('statTotal').textContent = '£' + total.toFixed(2);
+  document.getElementById('earnTotal').textContent = '£' + total.toFixed(2);
+  document.getElementById('earnMonth').textContent = '£' + total.toFixed(2);
+  document.getElementById('earnWeek').textContent = '£' + (total * 0.3).toFixed(2);
+  document.getElementById('earnToday').textContent = '£' + (total * 0.1).toFixed(2);
+}
+
+function filterBookings(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  const filtered = filter === 'all' ? allBookings : allBookings.filter(function(b) { return b.status === filter; });
+  renderBookings(filtered);
+}
+
+function renderBookings(data) {
+  const tbody = document.getElementById('bookingsTable');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">No bookings yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(function(b) {
+    const statusClass = b.status === 'new' ? 's-new' : b.status === 'accepted' ? 's-accepted' : b.status === 'completed' ? 's-completed' : 's-rejected';
+    const date = new Date(b.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    let actions = '';
+    if (b.status === 'new') {
+      actions = '<button class="action-btn btn-accept" onclick="updateStatus(' + b.id + ',\'accepted\')">✓ Accept</button><button class="action-btn btn-reject" onclick="updateStatus(' + b.id + ',\'rejected\')">✗ Reject</button>';
+    } else if (b.status === 'accepted') {
+      actions = '<button class="action-btn btn-complete" onclick="updateStatus(' + b.id + ',\'completed\')">✓ Complete</button>';
+    }
+    return '<tr>' +
+      '<td><strong>' + (b.name || '—') + '</strong><br><span style="font-size:11px;color:var(--slate);">' + (b.phone || '') + '</span></td>' +
+      '<td style="max-width:150px;font-size:12px;">' + (b.pickup || '—') + '</td>' +
+      '<td style="max-width:150px;font-size:12px;">' + (b.dropoff || '—') + '</td>' +
+      '<td style="font-size:12px;">' + (b.when || '—') + '</td>' +
+      '<td style="color:var(--amber);font-weight:600;">' + (b.fare || '—') + '</td>' +
+      '<td><span class="status-badge ' + statusClass + '">' + (b.status || 'new').toUpperCase() + '</span></td>' +
+      '<td>' + actions + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function renderEarnings(data) {
+  const tbody = document.getElementById('earningsTable');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No earnings yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(function(b) {
+    const statusClass = b.status === 'new' ? 's-new' : b.status === 'accepted' ? 's-accepted' : b.status === 'completed' ? 's-completed' : 's-rejected';
+    const date = new Date(b.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return '<tr>' +
+      '<td style="font-size:12px;color:var(--slate);">' + date + '</td>' +
+      '<td><strong>' + (b.name || '—') + '</strong></td>' +
+      '<td style="font-size:12px;">' + (b.pickup || '—') + ' → ' + (b.dropoff || '—') + '</td>' +
+      '<td style="color:var(--amber);font-weight:600;">' + (b.fare || '—') + '</td>' +
+      '<td><span class="status-badge ' + statusClass + '">' + (b.status || 'new').toUpperCase() + '</span></td>' +
+    '</tr>';
+  }).join('');
+}
+
+async function updateStatus(id, status) {
+  await sb.from('Bookings').update({ status: status }).eq('id', id);
+  loadBookings();
+}
+
+function addDriver() {
+  alert('Driver management coming soon! For now add drivers directly in your Supabase database.');
+}
+</script>
+</body>
+</html>

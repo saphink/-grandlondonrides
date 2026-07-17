@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grand London Rides – Payment</title>
+<script src="https://js.stripe.com/v3/"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: radial-gradient(ellipse at top, #161E36 0%, #10172A 60%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.card { background: #161E36; border-radius: 16px; border: 1px solid #232C49; padding: 32px; width: 100%; max-width: 440px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+.brand { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; justify-content: center; }
+.brand span { font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 600; color: #FAF8F4; }
+h2 { font-family: 'Space Grotesk', sans-serif; font-size: 22px; color: #FAF8F4; margin-bottom: 6px; }
+.subtitle { font-size: 13px; color: #5B6478; margin-bottom: 24px; }
+.trip-box { background: #1C2440; border-radius: 12px; padding: 16px; margin-bottom: 24px; }
+.trip-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.trip-row:last-child { margin-bottom: 0; border-top: 1px solid #2C3553; padding-top: 8px; margin-top: 4px; }
+.trip-label { font-size: 11px; color: #5B6478; letter-spacing: 0.08em; }
+.trip-value { font-size: 13px; color: #FAF8F4; text-align: right; max-width: 60%; }
+.fare-total { font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 700; color: #F2A33C; }
+.pay-btn { width: 100%; background: #F2A33C; color: #10172A; border: none; border-radius: 10px; padding: 14px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; }
+.pay-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.secure { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 11px; color: #5B6478; }
+.note { background: rgba(242,163,60,0.1); border: 1px solid rgba(242,163,60,0.2); border-radius: 8px; padding: 12px; font-size: 12px; color: #F2A33C; text-align: center; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">
+    <span>🚗</span>
+    <span>Grand London Rides</span>
+  </div>
+
+  <h2>Pay for your ride</h2>
+  <p class="subtitle">Secure payment powered by Stripe</p>
+
+  <div class="trip-box">
+    <div class="trip-row">
+      <span class="trip-label">PICKUP</span>
+      <span class="trip-value" id="sumPickup">Loading...</span>
+    </div>
+    <div class="trip-row">
+      <span class="trip-label">DROP-OFF</span>
+      <span class="trip-value" id="sumDropoff">Loading...</span>
+    </div>
+    <div class="trip-row">
+      <span class="trip-label">WHEN</span>
+      <span class="trip-value" id="sumWhen">Loading...</span>
+    </div>
+    <div class="trip-row">
+      <span class="trip-label">TOTAL FARE</span>
+      <span class="fare-total" id="sumFare">£0.00</span>
+    </div>
+  </div>
+
+  <div class="note">🔒 You will be taken to Stripe's secure payment page</div>
+
+  <button class="pay-btn" id="payBtn" onclick="goToStripe()">
+    🔒 Pay Now with Card
+  </button>
+  <div class="secure">🔒 Secured by Stripe · 256-bit SSL encryption</div>
+</div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+const pickup = params.get('pickup') || 'Not specified';
+const dropoff = params.get('dropoff') || 'Not specified';
+const when = params.get('when') || 'As soon as possible';
+const fare = parseFloat(params.get('fare') || '10').toFixed(2);
+const name = params.get('name') || '';
+const phone = params.get('phone') || '';
+
+document.getElementById('sumPickup').textContent = pickup;
+document.getElementById('sumDropoff').textContent = dropoff;
+document.getElementById('sumWhen').textContent = when;
+document.getElementById('sumFare').textContent = '£' + fare;
+
+async function goToStripe() {
+  const btn = document.getElementById('payBtn');
+  btn.disabled = true;
+  btn.textContent = 'Redirecting to payment...';
+
+  // Use Stripe Payment Links — created in Stripe Dashboard
+  // This is a pre-created payment link for Grand London Rides
+  const amountPence = Math.round(parseFloat(fare) * 100);
+  
+  // Redirect to Stripe checkout with the fare as a query param
+  // We'll use a Stripe Payment Link that accepts custom amounts
+  const stripeLink = 'https://buy.stripe.com/test_placeholder?prefilled_amount=' + amountPence;
+  
+  // For now show instructions to set up payment link
+  alert('Almost there! We need to create a Stripe Payment Link. Check the next steps!');
+  btn.disabled = false;
+  btn.textContent = '🔒 Pay Now with Card';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grand London Rides – Driver App</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAC6r_vi2yN0IAPrBKM8xiHo7FW6MituvM&libraries=places,geometry" async defer></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root { --navy: #0D1526; --navy2: #131F35; --card: #1A2640; --border: #243050; --amber: #F2A33C; --green: #22C55E; --red: #EF4444; --cream: #FAF8F4; --slate: #64748B; }
+body { font-family: 'Inter', sans-serif; background: var(--navy); color: var(--cream); min-height: 100vh; }
+
+.nav { background: var(--navy2); border-bottom: 1px solid var(--border); padding: 0 16px; display: flex; align-items: center; justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 100; }
+.nav-brand { font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 600; color: var(--cream); }
+.status-pill { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; cursor: pointer; border: none; font-size: 12px; font-weight: 600; }
+.status-pill.online { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+.status-pill.offline { background: rgba(100,116,139,0.15); color: var(--slate); border: 1px solid rgba(100,116,139,0.3); }
+.dot { width: 8px; height: 8px; border-radius: 50%; }
+.dot.green { background: var(--green); animation: pulse 2s infinite; }
+.dot.grey { background: var(--slate); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+#map { width: 100%; height: 300px; }
+
+.panel { padding: 16px; }
+.gps-status { background: var(--navy2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+.gps-info { font-size: 12px; color: var(--slate); }
+.gps-info strong { color: var(--cream); display: block; font-size: 13px; margin-bottom: 2px; }
+
+.request-card { background: var(--navy2); border: 1px solid var(--amber); border-radius: 12px; padding: 16px; margin-bottom: 12px; animation: glow 1.5s ease-in-out infinite; }
+@keyframes glow { 0%,100%{box-shadow:0 0 0 rgba(242,163,60,0)} 50%{box-shadow:0 0 16px rgba(242,163,60,0.25)} }
+.request-card.accepted { border-color: var(--green); animation: none; }
+.request-header { display: flex; justify-content: space-between; margin-bottom: 12px; }
+.badge { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px; }
+.badge-new { background: rgba(242,163,60,0.15); color: var(--amber); border: 1px solid rgba(242,163,60,0.3); }
+.badge-accepted { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+.route { display: flex; gap: 10px; margin-bottom: 12px; }
+.route-dots { display: flex; flex-direction: column; align-items: center; gap: 2px; padding-top: 3px; }
+.dot-pickup { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); }
+.dot-line { width: 1px; height: 20px; background: var(--border); }
+.dot-dropoff { width: 8px; height: 8px; border-radius: 3px; background: var(--green); }
+.route-text { flex: 1; }
+.route-addr { font-size: 13px; color: var(--cream); line-height: 1.4; }
+.route-addr.pickup { margin-bottom: 12px; }
+.fare { font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 700; color: var(--amber); }
+.customer { font-size: 12px; color: var(--slate); margin-top: 4px; }
+.btn-row { display: flex; gap: 8px; margin-top: 12px; }
+.btn { flex: 1; padding: 10px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; }
+.btn-accept { background: var(--green); color: #fff; }
+.btn-reject { background: transparent; color: var(--red); border: 1px solid var(--red); }
+.btn-complete { width: 100%; background: var(--amber); color: var(--navy); margin-top: 8px; }
+.btn-navigate { width: 100%; background: rgba(59,130,246,0.15); color: #3B82F6; border: 1px solid rgba(59,130,246,0.3); margin-top: 8px; }
+
+.empty { text-align: center; padding: 40px 20px; color: var(--slate); }
+.empty h3 { font-size: 16px; margin-bottom: 8px; color: var(--cream); }
+
+.earnings-row { display: flex; justify-content: space-between; background: var(--navy2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 8px; }
+.e-label { font-size: 12px; color: var(--slate); }
+.e-value { font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 700; color: var(--amber); }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">🚗 Driver App</div>
+  <button class="status-pill online" id="statusBtn" onclick="toggleOnline()">
+    <div class="dot green" id="statusDot"></div>
+    <span id="statusText">Online</span>
+  </button>
+</nav>
+
+<div id="map"></div>
+
+<div class="panel">
+  <div class="gps-status">
+    <div class="gps-info">
+      <strong id="gpsStatus">📍 Getting your location...</strong>
+      <span id="gpsCoords">Waiting for GPS signal</span>
+    </div>
+    <div style="font-size:20px;" id="gpsIcon">⏳</div>
+  </div>
+
+  <div id="requestsSection">
+    <p style="font-size:10px;font-weight:600;color:var(--slate);letter-spacing:0.12em;margin-bottom:12px;">INCOMING REQUESTS</p>
+    <div id="requestsList">
+      <div class="empty">
+        <h3>No new requests</h3>
+        <p>New ride requests will appear here automatically</p>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:20px;">
+    <p style="font-size:10px;font-weight:600;color:var(--slate);letter-spacing:0.12em;margin-bottom:12px;">TODAY'S EARNINGS</p>
+    <div class="earnings-row">
+      <div><div class="e-label">Rides completed</div><div class="e-value" id="ridesCount">0</div></div>
+      <div style="text-align:right;"><div class="e-label">Total earned</div><div class="e-value" id="totalEarned">£0.00</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://wpvjamzkpxlduqsceodh.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndwdmphbXprcHhsZHVxc2Nlb2RoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQwNjUyNjQsImV4cCI6MjA5OTY0MTI2NH0.2hr7uehwgjBkLUjE_RPA81hf7w6IWTKIrBCsMAUxSgE';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const DRIVER_ID = 'driver_' + Math.random().toString(36).substr(2, 9);
+const DRIVER_NAME = 'Akbar K.';
+let isOnline = true;
+let map, driverMarker, watchId;
+let currentLat = 51.5074, currentLng = -0.1278;
+let completedRides = 0, totalEarned = 0;
+
+function initMap() {
+  map = new google.maps.Map(document.getElementById('map'), {
+    center: { lat: currentLat, lng: currentLng },
+    zoom: 14,
+    styles: [
+      { elementType: 'geometry', stylers: [{ color: '#0d1526' }] },
+      { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
+      { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1a2640' }] },
+      { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0a1628' }] },
+      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+    ]
+  });
+
+  driverMarker = new google.maps.Marker({
+    position: { lat: currentLat, lng: currentLng },
+    map: map,
+    title: DRIVER_NAME,
+    icon: {
+      path: google.maps.SymbolPath.CIRCLE,
+      scale: 10,
+      fillColor: '#F2A33C',
+      fillOpacity: 1,
+      strokeColor: '#fff',
+      strokeWeight: 2
+    }
+  });
+
+  startGPS();
+}
+
+function startGPS() {
+  if (!navigator.geolocation) {
+    document.getElementById('gpsStatus').textContent = '❌ GPS not available';
+    return;
+  }
+
+  watchId = navigator.geolocation.watchPosition(
+    function(pos) {
+      currentLat = pos.coords.latitude;
+      currentLng = pos.coords.longitude;
+      const accuracy = Math.round(pos.coords.accuracy);
+
+      document.getElementById('gpsStatus').textContent = '📍 Location active';
+      document.getElementById('gpsCoords').textContent = currentLat.toFixed(5) + ', ' + currentLng.toFixed(5) + ' (±' + accuracy + 'm)';
+      document.getElementById('gpsIcon').textContent = '✅';
+
+      // Update marker on map
+      const pos2 = { lat: currentLat, lng: currentLng };
+      driverMarker.setPosition(pos2);
+      map.panTo(pos2);
+
+      // Save to Supabase every 5 seconds
+      if (isOnline) updateLocationInDB();
+    },
+    function(err) {
+      document.getElementById('gpsStatus').textContent = '⚠️ GPS error: ' + err.message;
+      document.getElementById('gpsIcon').textContent = '❌';
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+  );
+}
+
+let lastUpdate = 0;
+async function updateLocationInDB() {
+  const now = Date.now();
+  if (now - lastUpdate < 5000) return; // only update every 5 seconds
+  lastUpdate = now;
+
+  await sb.from('driver_locations').upsert({
+    driver_id: DRIVER_ID,
+    driver_name: DRIVER_NAME,
+    latitude: currentLat,
+    longitude: currentLng,
+    status: 'available',
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'driver_id' });
+}
+
+function toggleOnline() {
+  isOnline = !isOnline;
+  const btn = document.getElementById('statusBtn');
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+
+  if (isOnline) {
+    btn.className = 'status-pill online';
+    dot.className = 'dot green';
+    text.textContent = 'Online';
+    startGPS();
+  } else {
+    btn.className = 'status-pill offline';
+    dot.className = 'dot grey';
+    text.textContent = 'Offline';
+    if (watchId) navigator.geolocation.clearWatch(watchId);
+    sb.from('driver_locations').update({ status: 'offline' }).eq('driver_id', DRIVER_ID);
+  }
+}
+
+// Load bookings
+async function loadRequests() {
+  const { data } = await sb.from('Bookings').select('*').in('status', ['new', 'accepted']).order('created_at', { ascending: false });
+  if (!data || data.length === 0) return;
+
+  const list = document.getElementById('requestsList');
+  list.innerHTML = '';
+
+  data.forEach(function(b) {
+    const card = document.createElement('div');
+    card.className = b.status === 'accepted' ? 'request-card accepted' : 'request-card';
+    card.id = 'req-' + b.id;
+    card.innerHTML =
+      '<div class="request-header">' +
+        '<span class="badge ' + (b.status === 'accepted' ? 'badge-accepted' : 'badge-new') + '">' + (b.status === 'new' ? '🔔 NEW' : '✓ ACCEPTED') + '</span>' +
+        '<span style="font-size:11px;color:var(--slate);">' + new Date(b.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + '</span>' +
+      '</div>' +
+      '<div class="route">' +
+        '<div class="route-dots"><div class="dot-pickup"></div><div class="dot-line"></div><div class="dot-dropoff"></div></div>' +
+        '<div class="route-text"><div class="route-addr pickup">' + b.pickup + '</div><div class="route-addr">' + b.dropoff + '</div></div>' +
+      '</div>' +
+      '<div class="fare">' + (b.fare || 'N/A') + '</div>' +
+      '<div class="customer">👤 ' + b.name + ' · 📞 ' + b.phone + '</div>' +
+      (b.status === 'new' ?
+        '<div class="btn-row"><button class="btn btn-accept" onclick="acceptRide(' + b.id + ')">✓ Accept</button><button class="btn btn-reject" onclick="rejectRide(' + b.id + ')">✗ Reject</button></div>' :
+        '<button class="btn btn-complete" onclick="completeRide(' + b.id + ', \'' + b.fare + '\', \'' + (b.payment_method || 'card') + '\')">✓ Mark Complete</button>' +
+        '<button class="btn btn-navigate" onclick="navigate(\'' + encodeURIComponent(b.pickup) + '\')">🗺️ Navigate to Pickup</button>'
+      );
+    list.prepend(card);
+  });
+}
+
+async function acceptRide(id) {
+  await sb.from('Bookings').update({ status: 'accepted' }).eq('id', id);
+  loadRequests();
+}
+
+async function rejectRide(id) {
+  await sb.from('Bookings').update({ status: 'rejected' }).eq('id', id);
+  document.getElementById('req-' + id).remove();
+}
+
+async function completeRide(id, fare, paymentMethod) {
+  await sb.from('Bookings').update({ status: 'completed' }).eq('id', id);
+  completedRides++;
+  const amount = parseFloat((fare || '0').replace('£','').split('–')[0]) || 0;
+  totalEarned += amount;
+  document.getElementById('ridesCount').textContent = completedRides;
+  document.getElementById('totalEarned').textContent = '£' + totalEarned.toFixed(2);
+  document.getElementById('req-' + id).remove();
+
+  // Show cash popup if payment method is cash
+  if (paymentMethod === 'cash') {
+    document.getElementById('cashAmount').textContent = fare || '£0.00';
+    document.getElementById('cashPopup').style.display = 'flex';
+  }
+}
+
+function closeCashPopup() {
+  document.getElementById('cashPopup').style.display = 'none';
+}
+
+function navigate(pickup) {
+  window.open('https://www.google.com/maps/dir/?api=1&destination=' + pickup + '&travelmode=driving', '_blank');
+}
+
+// Poll every 5 seconds
+loadRequests();
+setInterval(loadRequests, 5000);
+
+window.initMap = initMap;
+</script>
+<!-- Cash Payment Popup -->
+<div id="cashPopup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:999;display:none;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#1A2640;border:1px solid #F2A33C;border-radius:16px;padding:28px;max-width:340px;width:100%;text-align:center;">
+    <div style="font-size:48px;margin-bottom:12px;">💵</div>
+    <h3 style="font-family:'Space Grotesk',sans-serif;font-size:20px;color:#FAF8F4;margin-bottom:8px;">Collect Cash Payment!</h3>
+    <p style="font-size:14px;color:#64748B;margin-bottom:16px;">This customer is paying by <strong style="color:#F2A33C;">cash</strong>. Please collect the fare before they leave.</p>
+    <div style="background:#0D1526;border-radius:10px;padding:16px;margin-bottom:20px;">
+      <p style="font-size:12px;color:#64748B;margin-bottom:4px;">AMOUNT TO COLLECT</p>
+      <p style="font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;color:#F2A33C;" id="cashAmount">£0.00</p>
+    </div>
+    <button onclick="closeCashPopup()" style="width:100%;background:#F2A33C;color:#0D1526;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;">✓ Cash Collected</button>
+  </div>
+</div>
+
+</body>
+</html>

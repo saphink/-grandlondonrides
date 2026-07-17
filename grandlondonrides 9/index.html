@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grand London Rides – Book a Taxi</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#F2A33C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GLRides">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAC6r_vi2yN0IAPrBKM8xiHo7FW6MituvM&libraries=places,geometry&callback=initMap" async defer></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', system-ui, sans-serif; background: #10172A; min-height: 100vh; }
+input, textarea, button { font-family: inherit; }
+
+.page { min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 20px 16px; background: radial-gradient(ellipse at top, #161E36 0%, #10172A 60%); gap: 24px; flex-wrap: wrap; }
+.wrap { width: 100%; max-width: 420px; }
+.brand-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 20px; }
+.card { background: #161E36; border-radius: 16px; border: 1px solid #232C49; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+.card-header { padding: 24px 24px 20px; }
+.tag { font-size: 11px; font-weight: 600; letter-spacing: 0.18em; color: #F2A33C; margin-bottom: 4px; }
+.card-body { padding: 24px; }
+
+/* Map */
+.map-wrap { width: 100%; max-width: 500px; }
+#map { width: 100%; height: 400px; border-radius: 16px; border: 1px solid #232C49; overflow: hidden; }
+.map-info { background: #161E36; border: 1px solid #232C49; border-radius: 12px; margin-top: 12px; padding: 16px; }
+.route-detail { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.route-detail:last-child { margin-bottom: 0; }
+
+label { font-size: 11px; font-weight: 500; color: #5B6478; margin-bottom: 6px; display: block; }
+input[type=text], input[type=tel], input[type=date], input[type=time], textarea {
+  width: 100%; background: transparent; border: none; border-bottom: 1px solid #2C3553;
+  color: #FAF8F4; font-size: 14px; padding: 8px 0; outline: none;
+}
+textarea { resize: none; }
+.err { font-size: 11px; color: #E4604D; margin-top: 4px; }
+.fare-box { background: #1C2440; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; }
+.pill-row { display: flex; gap: 8px; }
+.pill { flex: 1; padding: 10px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; text-align: center; }
+.pill.active { background: #F2A33C; color: #10172A; border: 1px solid #F2A33C; }
+.pill.inactive { background: transparent; color: #FAF8F4; border: 1px solid #2C3553; }
+.btn { width: 100%; background: #F2A33C; color: #10172A; border: none; border-radius: 10px; padding: 14px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 24px; }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.divider { border: none; border-top: 1px solid #232C49; margin: 20px 0; }
+
+/* Autocomplete dropdown styling */
+.pac-container { background: #1A2640; border: 1px solid #2C3553; border-radius: 8px; margin-top: 4px; font-family: 'Inter', sans-serif; }
+.pac-item { padding: 10px 14px; color: #E2E8F0; cursor: pointer; border-top: 1px solid #2C3553; font-size: 13px; }
+.pac-item:hover { background: #232C49; }
+.pac-item-query { color: #FAF8F4; font-weight: 500; }
+.pac-matched { color: #F2A33C; }
+
+/* Success screen */
+.success { padding: 40px 24px; text-align: center; }
+.success-icon { width: 56px; height: 56px; border-radius: 50%; background: #3FA873; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 24px; }
+</style>
+</head>
+<body>
+<div class="page" id="app">
+  <div class="wrap">
+    <div class="brand-row">
+      <span style="font-size:20px;">🚗</span>
+      <span style="font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:600;color:#FAF8F4;">Grand London Rides</span>
+    </div>
+    <div class="card" id="bookingCard">
+      <div class="card-header">
+        <p class="tag">BOOK YOUR RIDE</p>
+        <h1 style="font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:600;color:#FAF8F4;">Where to today?</h1>
+      </div>
+      <div style="border-top:1px solid #232C49;"></div>
+      <div class="card-body">
+
+        <div style="margin-bottom:16px;">
+          <label>📍 Pickup address</label>
+          <input id="pickup" type="text" placeholder="e.g. Heathrow Terminal 5"/>
+          <div class="err" id="pickup-err"></div>
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label>🏁 Drop-off address</label>
+          <input id="dropoff" type="text" placeholder="e.g. Mayfair, London"/>
+          <div class="err" id="dropoff-err"></div>
+        </div>
+
+        <!-- Vehicle Selection -->
+        <div style="margin-bottom:20px;" id="vehicleSection">
+          <label style="font-size:11px;font-weight:500;color:#5B6478;margin-bottom:8px;display:block;">🚗 Select vehicle type</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div id="car1to4" onclick="selectVehicle('1to4')" style="background:#1C2440;border:2px solid #2C3553;border-radius:12px;padding:14px;cursor:pointer;text-align:center;transition:all 0.2s;">
+              <div style="font-size:28px;margin-bottom:6px;">🚕</div>
+              <div style="font-size:13px;font-weight:600;color:#FAF8F4;">Saloon</div>
+              <div style="font-size:11px;color:#5B6478;margin-top:2px;">1–4 passengers</div>
+              
+            </div>
+            <div id="car5to8" onclick="selectVehicle('5to8')" style="background:#1C2440;border:2px solid #2C3553;border-radius:12px;padding:14px;cursor:pointer;text-align:center;transition:all 0.2s;">
+              <div style="font-size:28px;margin-bottom:6px;">🚐</div>
+              <div style="font-size:13px;font-weight:600;color:#FAF8F4;">MPV / Minibus</div>
+              <div style="font-size:11px;color:#5B6478;margin-top:2px;">5–8 passengers</div>
+              
+            </div>
+          </div>
+          <div class="err" id="vehicle-err"></div>
+        </div>
+
+        <div class="fare-box" id="fareBox" style="display:none;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:12px;color:#5B6478;" id="fareLabel">Calculating...</span>
+            <span style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;color:#F2A33C;" id="fareAmount"></span>
+          </div>
+          <div id="surcharges"></div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <label>🕐 When</label>
+          <div class="pill-row">
+            <div class="pill active" id="nowPill" onclick="setWhen('now')">Now</div>
+            <div class="pill inactive" id="laterPill" onclick="setWhen('later')">Schedule</div>
+          </div>
+          <div id="scheduleFields" style="display:none;margin-top:12px;display:none;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <div>
+                <input type="date" id="rideDate"/>
+                <div class="err" id="date-err"></div>
+              </div>
+              <div>
+                <input type="time" id="rideTime"/>
+                <div class="err" id="time-err"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid #232C49;margin-bottom:20px;"></div>
+
+        <div style="margin-bottom:16px;">
+          <label>👤 Your name</label>
+          <input id="name" type="text" placeholder="Full name"/>
+          <div class="err" id="name-err"></div>
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label>📞 Phone number</label>
+          <input id="phone" type="tel" placeholder="+44 7700 000000"/>
+          <div class="err" id="phone-err"></div>
+        </div>
+
+        <div>
+          <label>📝 Notes for driver (optional)</label>
+          <textarea id="notes" rows="2" placeholder="e.g. 2 large suitcases"></textarea>
+        </div>
+
+        <!-- Payment Method Selection -->
+        <div style="margin-bottom:16px;margin-top:20px;">
+          <label style="font-size:11px;font-weight:500;color:#5B6478;margin-bottom:8px;display:block;">💳 Payment method</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div id="payCard" onclick="selectPayment('card')" style="background:#1C2440;border:2px solid #2C3553;border-radius:12px;padding:12px;cursor:pointer;text-align:center;transition:all 0.2s;">
+              <div style="font-size:24px;margin-bottom:4px;">💳</div>
+              <div style="font-size:13px;font-weight:600;color:#FAF8F4;">Pay by Card</div>
+              <div style="font-size:11px;color:#5B6478;margin-top:2px;">Online payment</div>
+            </div>
+            <div id="payCash" onclick="selectPayment('cash')" style="background:#1C2440;border:2px solid #2C3553;border-radius:12px;padding:12px;cursor:pointer;text-align:center;transition:all 0.2s;">
+              <div style="font-size:24px;margin-bottom:4px;">💵</div>
+              <div style="font-size:13px;font-weight:600;color:#FAF8F4;">Pay by Cash</div>
+              <div style="font-size:11px;color:#5B6478;margin-top:2px;">Pay the driver</div>
+            </div>
+          </div>
+          <div class="err" id="payment-err"></div>
+        </div>
+
+        <button class="btn" id="submitBtn" onclick="submitBooking()">Request Ride →</button>
+        <p style="text-align:center;font-size:11px;color:#5B6478;margin-top:12px;">Licensed UK private hire operator · No surge pricing</p>
+      </div>
+    </div>
+    <p style="text-align:center;font-size:11px;color:#48516E;margin-top:16px;">grandlondonrides.co.uk</p>
+  </div>
+
+  <!-- MAP -->
+  <div class="map-wrap" id="mapSection" style="display:none;">
+    <div id="map"></div>
+    <div class="map-info" id="mapInfo" style="display:none;">
+      <div class="route-detail">
+        <span style="font-size:12px;color:#5B6478;">Distance</span>
+        <span style="font-size:14px;font-weight:600;color:#FAF8F4;" id="mapDistance">—</span>
+      </div>
+      <div class="route-detail">
+        <span style="font-size:12px;color:#5B6478;">Est. duration</span>
+        <span style="font-size:14px;font-weight:600;color:#FAF8F4;" id="mapDuration">—</span>
+      </div>
+      <div class="route-detail">
+        <span style="font-size:12px;color:#5B6478;">Estimated fare</span>
+        <span style="font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;color:#F2A33C;" id="mapFare">—</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SUCCESS -->
+<div id="successCard" style="display:none;" class="page">
+  <div class="wrap">
+    <div class="card">
+      <div class="success">
+        <div class="success-icon">✓</div>
+        <h2 style="font-family:'Space Grotesk',sans-serif;font-size:22px;color:#FAF8F4;margin-bottom:8px;">Ride requested!</h2>
+        <p style="color:#5B6478;font-size:14px;margin-bottom:24px;">We'll call or WhatsApp you shortly to confirm your driver.</p>
+        <div style="background:#1C2440;border-radius:12px;padding:16px;text-align:left;margin-bottom:24px;">
+          <div style="margin-bottom:10px;"><p style="font-size:10px;color:#F2A33C;letter-spacing:0.1em;">PICKUP</p><p style="font-size:13px;color:#FAF8F4;" id="confPickup"></p></div>
+          <div style="margin-bottom:10px;"><p style="font-size:10px;color:#F2A33C;letter-spacing:0.1em;">DROP-OFF</p><p style="font-size:13px;color:#FAF8F4;" id="confDropoff"></p></div>
+          <div style="margin-bottom:10px;"><p style="font-size:10px;color:#F2A33C;letter-spacing:0.1em;">ESTIMATED FARE</p><p style="font-size:13px;color:#FAF8F4;" id="confFare"></p></div>
+          <div><p style="font-size:10px;color:#F2A33C;letter-spacing:0.1em;">DISTANCE</p><p style="font-size:13px;color:#FAF8F4;" id="confDistance"></p></div>
+        </div>
+        <button class="btn" onclick="resetForm()">Book another ride</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://wpvjamzkpxlduqsceodh.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndwdmphbXprcHhsZHVxc2Nlb2RoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQwNjUyNjQsImV4cCI6MjA5OTY0MTI2NH0.2hr7uehwgjBkLUjE_RPA81hf7w6IWTKIrBCsMAUxSgE';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const RATES = { base: 3.0, perMile: 1.8, perMinute: 0.2, min: 6.0, congestion: 5.0, heathrowDrop: 7.0, heathrowPick: 4.0, gatwickDrop: 6.0, gatwickPick: 4.0 };
+
+let map, directionsService, directionsRenderer, pickupAC, dropoffAC;
+let selectedVehicle = null;
+let selectedPayment = null;
+
+function selectPayment(type) {
+  selectedPayment = type;
+  var cardDiv = document.getElementById('payCard');
+  var cashDiv = document.getElementById('payCash');
+  if (type === 'card') {
+    cardDiv.style.border = '2px solid #F2A33C';
+    cardDiv.style.background = 'rgba(242,163,60,0.1)';
+    cashDiv.style.border = '2px solid #2C3553';
+    cashDiv.style.background = '#1C2440';
+  } else {
+    cashDiv.style.border = '2px solid #F2A33C';
+    cashDiv.style.background = 'rgba(242,163,60,0.1)';
+    cardDiv.style.border = '2px solid #2C3553';
+    cardDiv.style.background = '#1C2440';
+  }
+  document.getElementById('payment-err').textContent = '';
+}
+
+function selectVehicle(type) {
+  selectedVehicle = type;
+  var car1 = document.getElementById('car1to4');
+  var car2 = document.getElementById('car5to8');
+  if (type === '1to4') {
+    car1.style.border = '2px solid #F2A33C';
+    car1.style.background = 'rgba(242,163,60,0.1)';
+    car2.style.border = '2px solid #2C3553';
+    car2.style.background = '#1C2440';
+  } else {
+    car2.style.border = '2px solid #F2A33C';
+    car2.style.background = 'rgba(242,163,60,0.1)';
+    car1.style.border = '2px solid #2C3553';
+    car1.style.background = '#1C2440';
+  }
+  document.getElementById('vehicle-err').textContent = '';
+  // Recalculate fare with vehicle multiplier
+  if (pickupPlace && dropoffPlace) calculateRoute();
+}
+let pickupPlace = null, dropoffPlace = null;
+let currentWhen = 'now';
+let routeData = { distance: '', duration: '', distanceMeters: 0, durationSeconds: 0, fareStr: '' };
+
+function initMap() {
+  map = new google.maps.Map(document.getElementById('map'), {
+    center: { lat: 51.5074, lng: -0.1278 },
+    zoom: 11,
+    styles: [
+      { elementType: 'geometry', stylers: [{ color: '#0d1526' }] },
+      { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
+      { elementType: 'labels.text.stroke', stylers: [{ color: '#0d1526' }] },
+      { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1a2640' }] },
+      { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#243050' }] },
+      { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#243050' }] },
+      { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0a1628' }] },
+      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+    ]
+  });
+
+  directionsService = new google.maps.DirectionsService();
+  directionsRenderer = new google.maps.DirectionsRenderer({
+    map: map,
+    polylineOptions: { strokeColor: '#F2A33C', strokeWeight: 4 }
+  });
+
+  const options = { componentRestrictions: { country: 'gb' }, fields: ['formatted_address', 'geometry', 'name'] };
+  pickupAC = new google.maps.places.Autocomplete(document.getElementById('pickup'), options);
+  dropoffAC = new google.maps.places.Autocomplete(document.getElementById('dropoff'), options);
+
+  pickupAC.addListener('place_changed', function() {
+    pickupPlace = pickupAC.getPlace();
+    calculateRoute();
+  });
+  dropoffAC.addListener('place_changed', function() {
+    dropoffPlace = dropoffAC.getPlace();
+    calculateRoute();
+  });
+}
+
+function calculateRoute() {
+  if (!pickupPlace || !dropoffPlace) return;
+
+  document.getElementById('mapSection').style.display = 'block';
+  document.getElementById('fareBox').style.display = 'block';
+  document.getElementById('fareLabel').textContent = 'Calculating route...';
+  document.getElementById('fareAmount').textContent = '';
+
+  directionsService.route({
+    origin: pickupPlace.geometry.location,
+    destination: dropoffPlace.geometry.location,
+    travelMode: google.maps.TravelMode.DRIVING,
+    unitSystem: google.maps.UnitSystem.IMPERIAL,
+    region: 'GB'
+  }, function(result, status) {
+    if (status !== 'OK') return;
+    directionsRenderer.setDirections(result);
+
+    const leg = result.routes[0].legs[0];
+    const distMeters = leg.distance.value;
+    const durSeconds = leg.duration.value;
+    const miles = distMeters / 1609.34;
+    const minutes = durSeconds / 60;
+
+    // Calculate fare
+    // Grand London Rides pricing:
+    // 0-2 miles = fixed £6.00
+    // 2+ miles = £6.00 + (miles - 2) * £2.90 per mile
+    let fare;
+    if (miles <= 2) {
+      fare = 6.00;
+    } else {
+      fare = 6.00 + (miles - 2) * 2.90;
+    }
+    // Apply vehicle multiplier for MPV/Minibus
+    if (selectedVehicle === '5to8') fare = fare * 1.6;
+    fare = Math.max(fare, RATES.min);
+
+    const surcharges = [];
+    const pu = document.getElementById('pickup').value.toLowerCase();
+    const do_ = document.getElementById('dropoff').value.toLowerCase();
+    const ccZones = ['central london','westminster','soho','covent garden','mayfair','holborn','ec1','ec2','ec3','ec4','wc1','wc2','sw1','w1'];
+
+    if (ccZones.some(z => pu.includes(z) || do_.includes(z))) {
+      fare += RATES.congestion;
+      surcharges.push({ label: 'Congestion Charge zone', amount: RATES.congestion });
+    }
+    if (do_.includes('heathrow')) { fare += RATES.heathrowDrop; surcharges.push({ label: 'Heathrow drop-off', amount: RATES.heathrowDrop }); }
+    else if (pu.includes('heathrow')) { fare += RATES.heathrowPick; surcharges.push({ label: 'Heathrow pickup', amount: RATES.heathrowPick }); }
+    if (do_.includes('gatwick')) { fare += RATES.gatwickDrop; surcharges.push({ label: 'Gatwick drop-off', amount: RATES.gatwickDrop }); }
+    else if (pu.includes('gatwick')) { fare += RATES.gatwickPick; surcharges.push({ label: 'Gatwick pickup', amount: RATES.gatwickPick }); }
+
+    const fareStr = '£' + fare.toFixed(2) + ' – £' + (fare * 1.18).toFixed(2);
+    routeData = { distance: leg.distance.text, duration: leg.duration.text, distanceMeters: distMeters, durationSeconds: durSeconds, fareStr };
+
+    document.getElementById('fareLabel').textContent = 'Est. fare · ' + leg.distance.text + ' · ' + leg.duration.text;
+    document.getElementById('fareAmount').textContent = fareStr;
+
+    let surHTML = '';
+    surcharges.forEach(function(s) {
+      surHTML += '<div style="display:flex;justify-content:space-between;border-top:1px solid #2C3553;padding-top:6px;"><span style="font-size:11px;color:#5B6478;">' + s.label + '</span><span style="font-size:11px;color:#FAF8F4;">+£' + s.amount.toFixed(2) + '</span></div>';
+    });
+    document.getElementById('surcharges').innerHTML = surHTML;
+
+    document.getElementById('mapDistance').textContent = leg.distance.text;
+    document.getElementById('mapDuration').textContent = leg.duration.text;
+    document.getElementById('mapFare').textContent = fareStr;
+    document.getElementById('mapInfo').style.display = 'block';
+  });
+}
+
+function setWhen(val) {
+  currentWhen = val;
+  document.getElementById('nowPill').className = 'pill ' + (val === 'now' ? 'active' : 'inactive');
+  document.getElementById('laterPill').className = 'pill ' + (val === 'later' ? 'active' : 'inactive');
+  document.getElementById('scheduleFields').style.display = val === 'later' ? 'block' : 'none';
+}
+
+function validate() {
+  let ok = true;
+  document.querySelectorAll('.err').forEach(function(e) { e.textContent = ''; });
+  if (!document.getElementById('pickup').value.trim()) { document.getElementById('pickup-err').textContent = 'Add a pickup address'; ok = false; }
+  if (!selectedVehicle) { document.getElementById('vehicle-err').textContent = 'Please select a vehicle type'; ok = false; }
+  if (!selectedPayment) { document.getElementById('payment-err').textContent = 'Please select a payment method'; ok = false; }
+  if (!document.getElementById('dropoff').value.trim()) { document.getElementById('dropoff-err').textContent = 'Add a drop-off address'; ok = false; }
+  if (currentWhen === 'later' && !document.getElementById('rideDate').value) { document.getElementById('date-err').textContent = 'Pick a date'; ok = false; }
+  if (currentWhen === 'later' && !document.getElementById('rideTime').value) { document.getElementById('time-err').textContent = 'Pick a time'; ok = false; }
+  if (!document.getElementById('name').value.trim()) { document.getElementById('name-err').textContent = 'Add your name'; ok = false; }
+  if (!/^[0-9+\s()-]{7,}$/.test(document.getElementById('phone').value.trim())) { document.getElementById('phone-err').textContent = 'Add a valid phone number'; ok = false; }
+  if (!selectedVehicle) { document.getElementById('vehicle-err').textContent = 'Please select a vehicle type'; ok = false; }
+  if (!selectedPayment) { document.getElementById('payment-err').textContent = 'Please select a payment method'; ok = false; }
+  return ok;
+}
+
+async function submitBooking() {
+  if (!validate()) return;
+  const btn = document.getElementById('submitBtn');
+  btn.textContent = 'Sending...';
+  btn.disabled = true;
+
+  const whenStr = currentWhen === 'now' ? 'As soon as possible' : document.getElementById('rideDate').value + ' at ' + document.getElementById('rideTime').value;
+  const booking = {
+    name: document.getElementById('name').value,
+    phone: document.getElementById('phone').value,
+    pickup: document.getElementById('pickup').value,
+    dropoff: document.getElementById('dropoff').value,
+    when: whenStr,
+    fare: routeData.fareStr || 'N/A',
+    notes: document.getElementById('notes').value || 'None',
+    status: 'new',
+    vehicle: selectedVehicle === '1to4' ? 'Saloon (1-4 passengers)' : 'MPV/Minibus (5-8 passengers)',
+    payment_method: selectedPayment
+  };
+
+  try { await sb.from('Bookings').insert([booking]); } catch(e) { console.error(e); }
+
+  // Send SMS via TextMagic Email-to-SMS using EmailJS
+  try {
+    const smsText = 'NEW BOOKING | Name: ' + booking.name + ' | Phone: ' + booking.phone + ' | Pickup: ' + booking.pickup + ' | Drop-off: ' + booking.dropoff + ' | When: ' + booking.when + ' | Fare: ' + booking.fare;
+    await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        service_id: 'service_gmail',
+        template_id: 'template_sms',
+        user_id: 'YOUR_EMAILJS_USER_ID',
+        template_params: {
+          to_email: 'akbarraza@textmagic.com',
+          message: smsText
+        }
+      })
+    });
+  } catch(e) { console.error('SMS error:', e); }
+  try {
+    await fetch('https://formspree.io/f/mvzjjkdv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(booking)
+    });
+  } catch(e) { console.error(e); }
+
+  document.getElementById('confPickup').textContent = booking.pickup;
+  document.getElementById('confDropoff').textContent = booking.dropoff;
+  document.getElementById('confFare').textContent = routeData.fareStr || 'N/A';
+  document.getElementById('confDistance').textContent = routeData.distance || 'N/A';
+
+  // Handle payment method
+  if (selectedPayment === 'card') {
+    window.location.href = 'https://buy.stripe.com/test_dRm3cugFi9pV6DPdcn2oE00';
+  } else {
+    document.getElementById('confPickup').textContent = booking.pickup;
+    document.getElementById('confDropoff').textContent = booking.dropoff;
+    document.getElementById('confFare').textContent = routeData.fareStr || 'N/A';
+    document.getElementById('confDistance').textContent = routeData.distance || 'N/A';
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('successCard').style.display = 'flex';
+  }
+}
+
+function resetForm() {
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('successCard').style.display = 'none';
+  document.getElementById('pickup').value = '';
+  document.getElementById('dropoff').value = '';
+  document.getElementById('name').value = '';
+  document.getElementById('phone').value = '';
+  document.getElementById('notes').value = '';
+  document.getElementById('fareBox').style.display = 'none';
+  document.getElementById('mapSection').style.display = 'none';
+  document.getElementById('mapInfo').style.display = 'none';
+  document.getElementById('submitBtn').textContent = 'Request Ride →';
+  document.getElementById('submitBtn').disabled = false;
+  pickupPlace = null; dropoffPlace = null;
+  routeData = { distance: '', duration: '', distanceMeters: 0, durationSeconds: 0, fareStr: '' };
+  if (directionsRenderer) directionsRenderer.setDirections({ routes: [] });
+}
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function() {
+    navigator.serviceWorker.register("/sw.js")
+      .then(function(reg) { console.log("SW registered"); })
+      .catch(function(err) { console.log("SW error:", err); });
+  });
+}
+</script>
+</body>
+</html>
